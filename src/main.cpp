@@ -18,7 +18,6 @@ void set_nonblocking(int sockfd) {
 
 int main() {
     TaskQueue queue;
-    ThreadPool pool(4, queue);
 
     // --- 1. SETUP TCP SOCKET (The Front Door for Text) ---
     int tcp_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -47,6 +46,7 @@ int main() {
 
     // --- 3. SETUP EPOLL (The Host) ---
     int epoll_fd = epoll_create1(0);
+    ThreadPool pool(4, queue, epoll_fd);
     struct epoll_event event, events[MAX_EVENTS];
     
     // Watch TCP socket

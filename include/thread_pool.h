@@ -12,6 +12,7 @@ class ThreadPool {
 private:
     std::vector<std::thread> workers;
     TaskQueue& task_queue; 
+    int epoll_fd;
     
     // --- NEW: State Management ---
     std::unordered_set<int> active_clients;
@@ -21,7 +22,7 @@ private:
     void broadcast(int sender_fd, const std::string& message);
 
 public:
-    ThreadPool(size_t num_threads, TaskQueue& queue);
+    ThreadPool(size_t num_threads, TaskQueue& queue, int epoll_fd);
     ~ThreadPool();
 
     // Let the Host (main.cpp) add new clients to the list

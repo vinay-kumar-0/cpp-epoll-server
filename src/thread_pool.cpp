@@ -5,9 +5,11 @@
  
 #include <sys/socket.h> // NEW: For recvfrom and sendto
 #include  <netinet/in.h>// NEW: For sockaddr_in
+#include <sys/epoll.h>
 
 
-ThreadPool::ThreadPool(size_t num_threads, TaskQueue& queue) : task_queue(queue) {
+ThreadPool::ThreadPool(size_t num_threads, TaskQueue& queue, int epoll_fd)
+    : task_queue(queue), epoll_fd(epoll_fd) {
     for (size_t i = 0; i < num_threads; ++i) {
         workers.emplace_back(&ThreadPool::worker_loop, this);
     }
@@ -28,6 +30,7 @@ void ThreadPool::add_client(int client_fd) {
 void ThreadPool::remove_client(int client_fd) {
     std::unique_lock lock(clients_mtx);
     active_clients.erase(client_fd);
+    epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_fd, nullptr);
     close(client_fd); 
 }
 
@@ -71,6 +74,21 @@ void ThreadPool::worker_loop() {
             ssize_t bytes_read = read(task->client_fd, buffer, sizeof(buffer) - 1);
 
             if (bytes_read > 0) {
+                if (bytes_read >= 4 && strncmp(buffer, "GET ", 4) == 0) {
+                    const char response_body[] =
+                        "Vinay's C++ Epoll Server is active! Connect via a TCP client to chat.";
+                    const std::string response =
+                        "HTTP/1.1 200 OK\r\n"
+                        "Content-Type: text/plain\r\n"
+                        "Content-Length: " + std::to_string(strlen(response_body)) + "\r\n"
+                        "Connection: close\r\n"
+                        "\r\n" + response_body;
+
+                    send(task->client_fd, response.c_str(), response.length(), 0);
+                    remove_client(task->client_fd);
+                    continue;
+                }
+
                 std::string msg = "User " + std::to_string(task->client_fd) + ": " + std::string(buffer);
                 std::cout << "Broadcasting: " << msg;
                 broadcast(task->client_fd, msg);
